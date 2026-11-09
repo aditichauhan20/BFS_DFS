@@ -13,3 +13,5 @@ The server compiles `main.cpp` automatically when the executable is missing or o
 To start from a terminal instead, run `python server.py` from the project folder.
 
 Route finding, comparison, and traversal animation also have a browser-side fallback. They continue to work if the server is stopped or the page is opened directly, though the C++ backend is used whenever it is available.
+
+BFS shows the shortest route. DFS shows the route through its depth-first search tree; this route can differ from BFS and may be longer.

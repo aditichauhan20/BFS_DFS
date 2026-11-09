@@ -185,6 +185,16 @@ function renderGraph() {
     const start = Number($("startNode").value || 0);
     const destination = Number($("endNode").value || 0);
 
+    const routeEdges = new Set();
+
+    for (let i = 0; i < lastPath.length - 1; i++) {
+        const from = lastPath[i];
+        const to = lastPath[i + 1];
+        routeEdges.add(
+            from < to ? `${from}:${to}` : `${to}:${from}`
+        );
+    }
+
 
     // DRAW CONNECTIONS
 
@@ -195,22 +205,10 @@ function renderGraph() {
 
         if (!a || !b) return "";
 
-        const onRoute =
-            !edge.blocked &&
-            lastPath.some((id, index) =>
-                index < lastPath.length - 1 &&
-                (
-                    (
-                        lastPath[index] === edge.from &&
-                        lastPath[index + 1] === edge.to
-                    )
-                    ||
-                    (
-                        lastPath[index] === edge.to &&
-                        lastPath[index + 1] === edge.from
-                    )
-                )
-            );
+        const edgeKey = edge.from < edge.to
+            ? `${edge.from}:${edge.to}`
+            : `${edge.to}:${edge.from}`;
+        const onRoute = !edge.blocked && routeEdges.has(edgeKey);
 
         const classes = [
             "graph-edge",
@@ -308,6 +306,8 @@ function clearResults(
     $("pathResult").textContent =
         "Your route will appear here.";
 
+    $("pathLabel").textContent = "ALGORITHM ROUTE";
+
     $("pathResult").classList.add("muted");
 
     $("nodesResult").textContent = "—";
@@ -358,7 +358,9 @@ function calculateLocally(algorithm, start, destination) {
         () => []
     );
 
-    activeEdges().forEach(edge => {
+    edges.forEach(edge => {
+        if (edge.blocked) return;
+
         graph[edge.from].push(edge.to);
         graph[edge.to].push(edge.from);
     });
@@ -367,6 +369,8 @@ function calculateLocally(algorithm, start, destination) {
 
     const traversal = [];
     const visited = new Set();
+    const parent = new Array(nodes.length).fill(-1);
+    parent[start] = start;
 
     if (algorithm === "BFS") {
 
@@ -379,69 +383,57 @@ function calculateLocally(algorithm, start, destination) {
             const current = queue[queueIndex++];
             traversal.push(current);
 
-            graph[current].forEach(neighbour => {
+            for (const neighbour of graph[current]) {
                 if (!visited.has(neighbour)) {
                     visited.add(neighbour);
+                    parent[neighbour] = current;
                     queue.push(neighbour);
                 }
-            });
+            }
 
         }
 
     } else {
 
-        const stack = [start];
+        const stack = [[start, 0]];
+        visited.add(start);
+        traversal.push(start);
 
         while (stack.length) {
 
-            const current = stack.pop();
+            const frame = stack[stack.length - 1];
+            const current = frame[0];
 
-            if (visited.has(current)) continue;
+            if (frame[1] >= graph[current].length) {
+                stack.pop();
+                continue;
+            }
 
-            visited.add(current);
-            traversal.push(current);
+            const neighbour = graph[current][frame[1]++];
 
-            [...graph[current]].reverse().forEach(neighbour => {
-                if (!visited.has(neighbour)) {
-                    stack.push(neighbour);
-                }
-            });
+            if (visited.has(neighbour)) continue;
+
+            visited.add(neighbour);
+            parent[neighbour] = current;
+            traversal.push(neighbour);
+            stack.push([neighbour, 0]);
 
         }
-
-    }
-
-    const parent = new Map([[start, -1]]);
-    const queue = [start];
-    let queueIndex = 0;
-
-    while (
-        queueIndex < queue.length &&
-        !parent.has(destination)
-    ) {
-
-        const current = queue[queueIndex++];
-
-        graph[current].forEach(neighbour => {
-            if (!parent.has(neighbour)) {
-                parent.set(neighbour, current);
-                queue.push(neighbour);
-            }
-        });
 
     }
 
     const path = [];
 
-    if (parent.has(destination)) {
+    if (parent[destination] !== -1) {
         for (
             let current = destination;
-            current !== -1;
-            current = parent.get(current)
+            current !== start;
+            current = parent[current]
         ) {
             path.push(current);
         }
 
+        path.push(start);
         path.reverse();
     }
 
@@ -574,6 +566,10 @@ async function runAlgorithm(
                     .map(id => nodes[id]?.name ?? `Node ${id}`)
                     .join(" → ")
                 : "No route is available between these locations.";
+
+        $("pathLabel").textContent = algorithm === "BFS"
+            ? "BFS ROUTE (SHORTEST)"
+            : "DFS ROUTE";
 
         $("traversalResult").classList.remove("muted");
 
@@ -975,7 +971,7 @@ Traversal: ${
             .join(" → ") || "None"
     }
 
-Shortest path: ${
+Route: ${
         (bfs.path || [])
             .map(id => nodes[id]?.name ?? id)
             .join(" → ") || "No route"
@@ -1002,7 +998,7 @@ Traversal: ${
             .join(" → ") || "None"
     }
 
-Shortest path: ${
+Route: ${
         (dfs.path || [])
             .map(id => nodes[id]?.name ?? id)
             .join(" → ") || "No route"

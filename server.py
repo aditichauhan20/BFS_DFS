@@ -209,7 +209,7 @@ class PathPilotHandler(SimpleHTTPRequestHandler):
                 ]
             )
 
-            path_text = data.get("Shortest Path", "")
+            path_text = data.get("Route", data.get("Shortest Path", ""))
 
             path = (
                 []
